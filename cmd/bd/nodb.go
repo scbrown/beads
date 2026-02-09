@@ -125,8 +125,8 @@ func loadIssuesFromJSONL(path string) ([]*types.Issue, error) {
 // 2. Common prefix from existing issues (if all share same prefix)
 // 3. Current directory name (fallback)
 func detectPrefix(_ string, memStore *memory.MemoryStorage) (string, error) {
-	// Check config.yaml for issue-prefix
-	configPrefix := config.GetString("issue-prefix")
+	// Check config.yaml for issue prefix (supports both "issue-prefix" and "prefix" keys)
+	configPrefix := config.GetIssuePrefix()
 	if configPrefix != "" {
 		return configPrefix, nil
 	}

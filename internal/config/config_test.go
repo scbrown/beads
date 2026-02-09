@@ -1931,3 +1931,108 @@ sync:
 		t.Errorf("GetNamedRoles() = %v, want nil when not set", got)
 	}
 }
+
+func TestGetIssuePrefix_IssuePrefix(t *testing.T) {
+	restore := envSnapshot(t)
+	defer restore()
+
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	// Config with standard "issue-prefix" key
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("issue-prefix: myproj\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Chdir(tmpDir)
+	ResetForTesting()
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize() error: %v", err)
+	}
+
+	if got := GetIssuePrefix(); got != "myproj" {
+		t.Errorf("GetIssuePrefix() = %q, want %q", got, "myproj")
+	}
+}
+
+func TestGetIssuePrefix_PrefixFallback(t *testing.T) {
+	restore := envSnapshot(t)
+	defer restore()
+
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	// Config with short "prefix" key (Gas Town convention)
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("prefix: dp\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Chdir(tmpDir)
+	ResetForTesting()
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize() error: %v", err)
+	}
+
+	if got := GetIssuePrefix(); got != "dp" {
+		t.Errorf("GetIssuePrefix() = %q, want %q (should fall back to 'prefix' key)", got, "dp")
+	}
+}
+
+func TestGetIssuePrefix_IssuePrefixTakesPrecedence(t *testing.T) {
+	restore := envSnapshot(t)
+	defer restore()
+
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	// Config with both keys - issue-prefix should win
+	configContent := "issue-prefix: correct\nprefix: fallback\n"
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Chdir(tmpDir)
+	ResetForTesting()
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize() error: %v", err)
+	}
+
+	if got := GetIssuePrefix(); got != "correct" {
+		t.Errorf("GetIssuePrefix() = %q, want %q (issue-prefix should take precedence)", got, "correct")
+	}
+}
+
+func TestGetIssuePrefix_Empty(t *testing.T) {
+	restore := envSnapshot(t)
+	defer restore()
+
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	// Config with neither key
+	if err := os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("json: false\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Chdir(tmpDir)
+	ResetForTesting()
+	if err := Initialize(); err != nil {
+		t.Fatalf("Initialize() error: %v", err)
+	}
+
+	if got := GetIssuePrefix(); got != "" {
+		t.Errorf("GetIssuePrefix() = %q, want empty string", got)
+	}
+}

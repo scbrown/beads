@@ -292,8 +292,8 @@ func autoImportIfNewer() {
 	if store != nil {
 		prefix, prefixErr := store.GetConfig(ctx, "issue_prefix")
 		if prefixErr != nil || prefix == "" {
-			// GH#1145: Check config.yaml for issue-prefix before auto-detecting
-			detectedPrefix := config.GetString("issue-prefix")
+			// GH#1145: Check config.yaml for issue prefix before auto-detecting
+			detectedPrefix := config.GetIssuePrefix()
 
 			// If config.yaml doesn't have it, try to detect from JSONL
 			if detectedPrefix == "" {
@@ -780,7 +780,7 @@ func filterByMultiRepoPrefix(ctx context.Context, s storage.Storage, issues []*t
 	// Get our configured prefix (GH#1145: fallback to config.yaml)
 	prefix, prefixErr := s.GetConfig(ctx, "issue_prefix")
 	if prefixErr != nil || prefix == "" {
-		prefix = config.GetString("issue-prefix")
+		prefix = config.GetIssuePrefix()
 		if prefix == "" {
 			return issues
 		}

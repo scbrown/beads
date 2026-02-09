@@ -118,8 +118,8 @@ func getMergeSlotID() string {
 	// Use the prefix from beads config (default "bd")
 	prefix := "bd"
 
-	// First try config.yaml (issue-prefix)
-	if configPrefix := config.GetString("issue-prefix"); configPrefix != "" {
+	// First try config.yaml (supports both "issue-prefix" and "prefix" keys)
+	if configPrefix := config.GetIssuePrefix(); configPrefix != "" {
 		prefix = strings.TrimSuffix(configPrefix, "-")
 	} else if daemonClient != nil {
 		// Daemon mode - use RPC to get config

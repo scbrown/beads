@@ -470,7 +470,7 @@ var createCmd = &cobra.Command{
 				// Direct mode - check config (GH#1145: fallback to config.yaml)
 				dbPrefix, _ = store.GetConfig(ctx, "issue_prefix")
 				if dbPrefix == "" {
-					dbPrefix = config.GetString("issue-prefix")
+					dbPrefix = config.GetIssuePrefix()
 				}
 				allowedPrefixes, _ = store.GetConfig(ctx, "allowed_prefixes")
 			}

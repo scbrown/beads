@@ -121,8 +121,8 @@ variable.`,
 
 		// Determine prefix with precedence: flag > config > auto-detect from git > auto-detect from directory name
 		if prefix == "" {
-			// Try to get from config file
-			prefix = config.GetString("issue-prefix")
+			// Try to get from config file (supports both "issue-prefix" and "prefix" keys)
+			prefix = config.GetIssuePrefix()
 		}
 
 		// auto-detect prefix from first issue in JSONL file

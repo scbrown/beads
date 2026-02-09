@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -179,11 +180,16 @@ func (s *SQLiteStorage) CreateIssue(ctx context.Context, issue *types.Issue, act
 	var configPrefix string
 	err = conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&configPrefix)
 	if errors.Is(err, sql.ErrNoRows) || configPrefix == "" {
-		// CRITICAL: Reject operation if issue_prefix config is missing
+		// Fallback to config.yaml (supports both "issue-prefix" and "prefix" keys)
+		configPrefix = config.GetIssuePrefix()
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+	if configPrefix == "" {
+		// CRITICAL: Reject operation if no prefix can be determined
 		// This prevents duplicate issues with wrong prefix
 		return fmt.Errorf("database not initialized: issue_prefix config is missing (run 'bd init --prefix <prefix>' first)")
-	} else if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Determine prefix for ID generation and validation:

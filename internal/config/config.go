@@ -381,6 +381,17 @@ func LogOverride(override ConfigOverride) {
 		override.Key, overrideDesc, override.OriginalValue, sourceDesc, override.EffectiveValue)
 }
 
+// GetIssuePrefix returns the configured issue prefix.
+// Checks "issue-prefix" first, then falls back to "prefix" for compatibility
+// with tools (like Gas Town) that use the shorter key name in config.yaml.
+func GetIssuePrefix() string {
+	p := GetString("issue-prefix")
+	if p == "" {
+		p = GetString("prefix")
+	}
+	return p
+}
+
 // GetString retrieves a string configuration value
 func GetString(key string) string {
 	if v == nil {
