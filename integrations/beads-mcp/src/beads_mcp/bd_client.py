@@ -1,4 +1,4 @@
-"""Client for interacting with bd (beads) CLI and daemon."""
+"""Client for interacting with bd (beads) CLI."""
 
 import asyncio
 import json
@@ -862,7 +862,6 @@ BdClient = BdCliClient
 
 
 def create_bd_client(
-    prefer_daemon: bool = False,
     bd_path: Optional[str] = None,
     beads_dir: Optional[str] = None,
     beads_db: Optional[str] = None,
@@ -874,7 +873,6 @@ def create_bd_client(
     """Create a bd CLI client.
 
     Args:
-        prefer_daemon: Deprecated, ignored. Kept for API compatibility.
         bd_path: Path to bd executable
         beads_dir: Path to .beads directory
         beads_db: Path to beads database (deprecated)

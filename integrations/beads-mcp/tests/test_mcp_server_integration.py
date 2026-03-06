@@ -79,7 +79,7 @@ async def mcp_client(bd_executable, temp_db, monkeypatch):
     # The workspace root is the parent directory
     workspace_root = os.path.dirname(temp_db)
 
-    # Disable daemon mode for tests (prevents daemon accumulation and timeouts)
+    # Ensure clean test environment
     os.environ["BEADS_NO_DAEMON"] = "1"
 
     # Create test client
