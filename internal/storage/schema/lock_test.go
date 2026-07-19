@@ -158,8 +158,11 @@ func expectColumnExists(mock sqlmock.Sqlmock, present bool) {
 
 // expectContentHashColumnExists mocks the idempotent ensureContentHashColumn
 // probe, reporting that the content_hash column already exists (so no ALTER runs).
+// hasContentHashColumn uses SHOW COLUMNS (not INFORMATION_SCHEMA) since aegis-s9m7;
+// the table-agnostic regex matches the main then ignored cursor probe in order.
 func expectContentHashColumnExists(mock sqlmock.Sqlmock) {
-	expectColumnExists(mock, true)
+	mock.ExpectQuery(`SHOW COLUMNS FROM \S+ LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(true))
 }
 
 func expectScalar(mock sqlmock.Sqlmock, query, column string, value any) {

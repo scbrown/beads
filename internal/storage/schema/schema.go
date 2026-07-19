@@ -730,16 +730,48 @@ func (m migrationSource) bootstrapSQL() string {
 }
 
 // hasContentHashColumn reports whether the cursor table already carries the
-// content_hash column. It probes INFORMATION_SCHEMA, so a not-yet-created table
-// simply reports false.
+// content_hash column. It reads the table's own metadata via SHOW COLUMNS; a
+// not-yet-created table reports "table not found", which we treat as false.
+//
+// This deliberately does NOT use `SELECT ... FROM INFORMATION_SCHEMA.COLUMNS`:
+// Dolt does not push the predicate down and scans every column in the database
+// for that form, costing ~1.4s per call (measured against dolt.lan). Because
+// migrationWorkNeeded probes both cursor tables on EVERY write, that was ~2.9s —
+// roughly 95% — of `bd update`'s latency while a read paid none of it, the
+// asymmetry aegis-s9m7 was filed for. SHOW COLUMNS answers the same question in
+// ~0.03s. The column, once present, never leaves; the answer is a constant and
+// must be cheap.
 func (m migrationSource) hasContentHashColumn(ctx context.Context, db DBConn) (bool, error) {
-	var count int
-	if err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'content_hash'`,
-		m.cursorTable).Scan(&count); err != nil {
+	// cursorTable is a package constant ("schema_migrations" / "ignored_schema_
+	// migrations"), never user input; SHOW COLUMNS also does not accept a ?
+	// placeholder for the table name. This mirrors the existing FROM "+m.cursorTable
+	// concatenations in this file.
+	rows, err := db.QueryContext(ctx,
+		fmt.Sprintf("SHOW COLUMNS FROM %s LIKE 'content_hash'", m.cursorTable))
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return false, nil // matches the prior INFORMATION_SCHEMA COUNT(*)=0 on a missing table
+		}
 		return false, fmt.Errorf("checking %s.content_hash: %w", m.cursorTable, err)
 	}
-	return count > 0, nil
+	defer rows.Close()
+	has := rows.Next() // LIKE returns exactly the matching column, or no rows
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("checking %s.content_hash: %w", m.cursorTable, err)
+	}
+	return has, nil
+}
+
+// isTableNotFoundError reports whether err is a "table does not exist" error, so
+// a content_hash probe on a not-yet-created cursor table reports absent rather
+// than failing. Covers Dolt ("table not found: X") and MySQL ("Table 'db.t'
+// doesn't exist", error 1146).
+func isTableNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "table not found") || strings.Contains(s, "doesn't exist")
 }
 
 // ensureContentHashColumn adds the content_hash column to an existing cursor

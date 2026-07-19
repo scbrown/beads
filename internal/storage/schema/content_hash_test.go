@@ -13,6 +13,19 @@ import (
 	"github.com/steveyegge/beads/internal/testutil"
 )
 
+// showColumnsRows builds a SHOW COLUMNS result set — one row when the
+// content_hash column is present, zero when absent. hasContentHashColumn probes
+// via SHOW COLUMNS (not INFORMATION_SCHEMA) since aegis-s9m7; these expectations
+// double as the regression guard — reintroducing the ~1.4s INFORMATION_SCHEMA
+// scan would fail ExpectationsWereMet here, deterministically and with no server.
+func showColumnsRows(present bool) *sqlmock.Rows {
+	r := sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"})
+	if present {
+		r.AddRow("content_hash", "char(64)", "YES", "", nil, "")
+	}
+	return r
+}
+
 // TestEnsureContentHashColumnAddsWhenMissing verifies the idempotent upgrade adds
 // the content_hash column to an existing cursor table that lacks it.
 func TestEnsureContentHashColumnAddsWhenMissing(t *testing.T) {
@@ -22,8 +35,8 @@ func TestEnsureContentHashColumnAddsWhenMissing(t *testing.T) {
 	}
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM INFORMATION_SCHEMA\.COLUMNS`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SHOW COLUMNS FROM schema_migrations LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(false))
 	mock.ExpectExec(`ALTER TABLE schema_migrations ADD COLUMN content_hash CHAR\(64\)`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
@@ -48,8 +61,8 @@ func TestEnsureContentHashColumnNoOpWhenPresent(t *testing.T) {
 	}
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM INFORMATION_SCHEMA\.COLUMNS`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`SHOW COLUMNS FROM schema_migrations LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(true))
 	// No ExpectExec: an ALTER here would be an unexpected call.
 
 	added, err := mainSource.ensureContentHashColumn(context.Background(), db)
@@ -112,8 +125,8 @@ func TestMigrationWorkNeededAddsContentHashColumnOnUpToDateDB(t *testing.T) {
 	expectScalar(mock, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations", "version", LatestVersion())
 	expectScalar(mock, "SELECT COALESCE(MAX(version), 0) FROM ignored_schema_migrations", "version", LatestIgnoredVersion())
 	// ...but schema_migrations predates the content_hash column.
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM INFORMATION_SCHEMA\.COLUMNS`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SHOW COLUMNS FROM schema_migrations LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(false))
 
 	needed, err := migrationWorkNeeded(context.Background(), db)
 	if err != nil {
@@ -140,10 +153,10 @@ func TestMigrationWorkNotNeededWhenContentHashColumnsPresent(t *testing.T) {
 
 	expectScalar(mock, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations", "version", LatestVersion())
 	expectScalar(mock, "SELECT COALESCE(MAX(version), 0) FROM ignored_schema_migrations", "version", LatestIgnoredVersion())
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM INFORMATION_SCHEMA\.COLUMNS`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM INFORMATION_SCHEMA\.COLUMNS`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`SHOW COLUMNS FROM schema_migrations LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(true))
+	mock.ExpectQuery(`SHOW COLUMNS FROM ignored_schema_migrations LIKE 'content_hash'`).
+		WillReturnRows(showColumnsRows(true))
 	// No backfill pending (custom tables already populated).
 	expectScalar(mock, "SELECT COUNT(*) FROM custom_types", "count", 1)
 	expectScalar(mock, "SELECT COUNT(*) FROM custom_statuses", "count", 1)
