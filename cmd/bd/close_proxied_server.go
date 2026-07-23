@@ -40,7 +40,10 @@ func runCloseProxiedServer(cmd *cobra.Command, ctx context.Context, args []strin
 		FatalErrorRespectJSON("no issue ID provided")
 	}
 
-	reasons, updatedArgs, err := resolveCloseReasons(cmd, args)
+	// The explicit-reason flag is unused here: proxied closes forward to the
+	// server, which has its own already-closed handling; the aegis-arqu
+	// re-close semantics are implemented in the direct path only for now.
+	reasons, updatedArgs, _, err := resolveCloseReasons(cmd, args)
 	if err != nil {
 		FatalErrorRespectJSON("%v", err)
 	}

@@ -178,7 +178,7 @@ func TestCloseResolveReasons_PerIDReasons(t *testing.T) {
 	var gotReasons, gotArgs []string
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		var err error
-		gotReasons, gotArgs, err = resolveCloseReasons(cmd, args)
+		gotReasons, gotArgs, _, err = resolveCloseReasons(cmd, args)
 		if err != nil {
 			t.Fatalf("resolveCloseReasons: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestCloseResolveReasons_SharedReasonForMultipleIDs(t *testing.T) {
 	var gotReasons, gotArgs []string
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		var err error
-		gotReasons, gotArgs, err = resolveCloseReasons(cmd, args)
+		gotReasons, gotArgs, _, err = resolveCloseReasons(cmd, args)
 		if err != nil {
 			t.Fatalf("resolveCloseReasons: %v", err)
 		}
@@ -226,7 +226,7 @@ func TestCloseResolveReasons_EmptyReasonFallsBackToDefault(t *testing.T) {
 	var gotReasons, gotArgs []string
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		var err error
-		gotReasons, gotArgs, err = resolveCloseReasons(cmd, args)
+		gotReasons, gotArgs, _, err = resolveCloseReasons(cmd, args)
 		if err != nil {
 			t.Fatalf("resolveCloseReasons: %v", err)
 		}
@@ -256,7 +256,7 @@ func TestCloseResolveReasons_EmptyReasonDoesNotConflictWithReasonFile(t *testing
 	var gotReasons, gotArgs []string
 	cmd.Run = func(cmd *cobra.Command, args []string) {
 		var err error
-		gotReasons, gotArgs, err = resolveCloseReasons(cmd, args)
+		gotReasons, gotArgs, _, err = resolveCloseReasons(cmd, args)
 		if err != nil {
 			t.Fatalf("resolveCloseReasons: %v", err)
 		}
@@ -278,7 +278,7 @@ func TestCloseResolveReasons_RejectsMismatchedPerIDReasons(t *testing.T) {
 	cmd.SetArgs([]string{"issue-a", "--reason", "reason A", "issue-b", "--reason", "reason B", "issue-c"})
 
 	cmd.Run = func(cmd *cobra.Command, args []string) {
-		_, _, err := resolveCloseReasons(cmd, args)
+		_, _, _, err := resolveCloseReasons(cmd, args)
 		if err == nil {
 			t.Fatal("expected mismatch error, got nil")
 		}
