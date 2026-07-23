@@ -393,6 +393,16 @@ var createCmd = &cobra.Command{
 				targetBeadsDir := routing.ExpandPath(repoPath)
 				debug.Logf("DEBUG: Routing to target repo: %s\n", targetBeadsDir)
 
+				// An EXPLICIT --repo must name a repo that already exists
+				// (see validateExplicitRepoTarget). Auto-routing keeps the
+				// create-if-missing behavior: its paths come from routing
+				// config, not typos.
+				if cmd.Flags().Changed("repo") {
+					if err := validateExplicitRepoTarget(targetBeadsDir, repoOverride); err != nil {
+						FatalError("%v", err)
+					}
+				}
+
 				// Ensure target beads directory exists with prefix inheritance
 				if err := ensureBeadsDirForPath(rootCtx, targetBeadsDir, store); err != nil {
 					FatalError("failed to initialize target repo: %v", err)
@@ -981,6 +991,24 @@ func openDryRunTargetStore(ctx context.Context, repoPath string) (storage.DoltSt
 // ensureBeadsDirForPath ensures a beads directory exists at the target path.
 // If the .beads directory doesn't exist, it creates it and initializes with
 // the same prefix as the source store (T010, T012: prefix inheritance).
+// validateExplicitRepoTarget refuses an explicit --repo value that does not
+// name an existing beads repo. Any bare word is a valid relative path, so a
+// typo'd or merely-guessed repo name used to resolve to a fresh directory,
+// get a brand-new empty store created for it, take the write, and print the
+// normal success line — the issue landed in a database nothing else will ever
+// open (silent data loss).
+func validateExplicitRepoTarget(targetBeadsDir, repoOverride string) error {
+	if _, err := os.Stat(filepath.Join(targetBeadsDir, ".beads")); err != nil {
+		return fmt.Errorf("--repo %q is not an existing beads repo (no .beads/ at %s)\n"+
+			"Refusing to create a new store implicitly: the issue would be written to a "+
+			"database no other command reads, while reporting success.\n"+
+			"Pass a path to an existing repo (its directory must contain .beads/), "+
+			"or run bd create from inside the target repo",
+			repoOverride, targetBeadsDir)
+	}
+	return nil
+}
+
 func ensureBeadsDirForPath(ctx context.Context, targetPath string, sourceStore storage.DoltStorage) error {
 	beadsDir := filepath.Join(targetPath, ".beads")
 	metadataPath := filepath.Join(beadsDir, "metadata.json")
