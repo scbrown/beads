@@ -128,6 +128,64 @@ func TestEmbeddedClose(t *testing.T) {
 		}
 	})
 
+	// ===== Re-close semantics (aegis-arqu) =====
+	// Before the fix, `bd close --reason` on an already-closed issue printed
+	// the ✓ line echoing the reason, exited 0, and stored NOTHING — the exact
+	// command a stub-close-reason remediation sweep uses, so the sweep would
+	// "run clean" and change nothing. These assert the STORED value, never
+	// the exit code (the exit code lied for months).
+
+	t.Run("reclose_with_new_reason_updates_stored_value", func(t *testing.T) {
+		issue := bdCreate(t, bd, dir, "Reclose updates", "--type", "task")
+		bdClose(t, bd, dir, issue.ID, "--reason", "first-reason")
+		out := bdClose(t, bd, dir, issue.ID, "--reason", "second-reason")
+		got := bdShow(t, bd, dir, issue.ID)
+		if got.CloseReason != "second-reason" {
+			t.Errorf("re-close with explicit --reason must update the STORED close_reason: want %q, got %q", "second-reason", got.CloseReason)
+		}
+		if !strings.Contains(out, "Updated close reason") {
+			t.Errorf("re-close output should say it UPDATED the reason (not claim a close): %q", out)
+		}
+	})
+
+	t.Run("reclose_without_reason_is_noop_that_says_so", func(t *testing.T) {
+		issue := bdCreate(t, bd, dir, "Reclose noop", "--type", "task")
+		bdClose(t, bd, dir, issue.ID, "--reason", "the-real-reason")
+		// CombinedOutput: the no-op notice goes to stderr (diagnostics), which
+		// bdClose discards on success.
+		cmd := exec.Command(bd, "close", issue.ID)
+		cmd.Dir = dir
+		cmd.Env = bdEnv(dir)
+		outBytes, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("re-close without reason should still exit 0 (idempotent): %v\n%s", err, outBytes)
+		}
+		out := string(outBytes)
+		got := bdShow(t, bd, dir, issue.ID)
+		if got.CloseReason != "the-real-reason" {
+			t.Errorf("re-close without --reason must not clobber the stored reason: got %q", got.CloseReason)
+		}
+		if strings.Contains(out, "✓ Closed") {
+			t.Errorf("re-close no-op must not print the ✓ Closed success line: %q", out)
+		}
+		if !strings.Contains(out, "already closed") {
+			t.Errorf("re-close no-op should say the issue is already closed: %q", out)
+		}
+	})
+
+	t.Run("reclose_same_reason_reports_unchanged", func(t *testing.T) {
+		issue := bdCreate(t, bd, dir, "Reclose same", "--type", "task")
+		bdClose(t, bd, dir, issue.ID, "--reason", "same-reason")
+		out := bdClose(t, bd, dir, issue.ID, "--reason", "same-reason")
+		got := bdShow(t, bd, dir, issue.ID)
+		if got.CloseReason != "same-reason" {
+			t.Errorf("stored reason should be untouched, got %q", got.CloseReason)
+		}
+		if !strings.Contains(out, "unchanged") {
+			t.Errorf("same-reason re-close should report unchanged: %q", out)
+		}
+	})
+
 	t.Run("close_with_reason_short", func(t *testing.T) {
 		issue := bdCreate(t, bd, dir, "Short reason", "--type", "task")
 		bdClose(t, bd, dir, issue.ID, "-r", "fixed")
