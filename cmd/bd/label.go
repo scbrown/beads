@@ -19,6 +19,16 @@ var labelCmd = &cobra.Command{
 	Use:     "label",
 	GroupID: "issues",
 	Short:   "Manage issue labels",
+	// Bare `bd label <id> <label>` (missing `add`) must FAIL LOUDLY, not
+	// print help with exit 0 — scripts turned that silent no-op into false
+	// success reports. Suggest the almost-certainly-intended command.
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return nil
+		}
+		return fmt.Errorf("unknown subcommand %q for %q — to add a label: %s add %s",
+			args[0], cmd.CommandPath(), cmd.CommandPath(), strings.Join(args, " "))
+	},
 }
 
 // processBatchLabelOperation wraps label add/remove for multiple issues in a

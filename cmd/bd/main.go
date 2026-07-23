@@ -804,6 +804,13 @@ var rootCmd = &cobra.Command{
 			skipsStoreInit = true
 		}
 
+		// Skip for bare parent commands running the enforceParentArgs help
+		// shim — a parent invoked with no subcommand only prints help, which
+		// needs no store (and must not fail outside a workspace).
+		if cmd.Annotations[bareParentHelpAnnotation] == "true" {
+			skipsStoreInit = true
+		}
+
 		// Also skip for --version flag on root command (cmdName would be "bd")
 		if v, _ := cmd.Flags().GetBool("version"); v {
 			skipsStoreInit = true
@@ -1427,7 +1434,52 @@ func main() {
 	rootCmd.InitDefaultHelpCmd()
 	registerHelpAllFlag()
 
+	// Reject unrecognized args to parent commands with a non-zero exit.
+	// Must run after init() so the full command tree is registered.
+	enforceParentArgs(rootCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
+	}
+}
+
+// enforceParentArgs walks the command tree and makes every bare parent
+// command (has subcommands, no Run) reject unrecognized arguments with a
+// NON-ZERO exit. Cobra's default for that case is print-help-and-exit-0,
+// which scripts read as silent success: e.g. `bd label <id> <label>`
+// (missing the `add` subcommand) used to no-op with exit 0, so
+// `bd label X Y >/dev/null && echo ok` reported success for work that
+// never happened.
+//
+// Two pieces are required, both, in this order (cobra v1.10.2 execute():
+// a NON-runnable command returns ErrHelp BEFORE ValidateArgs ever runs, so
+// an Args validator alone on a bare parent is dead code):
+//   - RunE makes the parent Runnable (bare invocation still prints help);
+//   - Args rejects stray args at ValidateArgs time — which runs before
+//     PersistentPreRun, so the error path never touches telemetry or the
+//     store. Parents that declare their own Args keep it.
+//
+// bareParentHelpAnnotation marks commands whose RunE is the enforceParentArgs
+// help shim, so PersistentPreRun can skip store init for them (bare parent
+// invocations only print help and must work outside any workspace).
+const bareParentHelpAnnotation = "bd_bare_parent_help"
+
+func enforceParentArgs(cmd *cobra.Command) {
+	if cmd.HasSubCommands() && !cmd.Runnable() {
+		if cmd.Args == nil {
+			cmd.Args = cobra.NoArgs // "unknown command %q for %q", non-zero exit
+		}
+		if cmd.Annotations == nil {
+			cmd.Annotations = map[string]string{}
+		}
+		cmd.Annotations[bareParentHelpAnnotation] = "true"
+		cmd.RunE = func(c *cobra.Command, args []string) error {
+			// Args validation already rejected stray args; reaching here
+			// means a bare invocation — show help like before (exit 0).
+			return c.Help()
+		}
+	}
+	for _, sub := range cmd.Commands() {
+		enforceParentArgs(sub)
 	}
 }
