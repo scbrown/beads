@@ -47,7 +47,7 @@ the flags appear in the command line.`,
 			}
 			args = []string{lastTouched}
 		}
-		reasons, updatedArgs, err := resolveCloseReasons(cmd, args)
+		reasons, updatedArgs, explicitReason, err := resolveCloseReasons(cmd, args)
 		if err != nil {
 			FatalErrorRespectJSON("%v", err)
 		}
@@ -100,6 +100,12 @@ the flags appear in the command line.`,
 		// Direct mode
 		closedIssues := []*types.Issue{}
 		closedCount := 0
+		// Re-close outcomes (aegis-arqu): reasonUpdatedCount are real writes
+		// (gate the Dolt commit); alreadyClosedCount are satisfied-intent
+		// no-ops (must not trip the nothing-was-closed exit 1, which exists
+		// for guard REFUSALS, not for idempotent re-closes).
+		reasonUpdatedCount := 0
+		alreadyClosedCount := 0
 
 		for i, id := range resolvedIDs {
 			result := results[i]
@@ -110,6 +116,42 @@ the flags appear in the command line.`,
 
 			if err := validateIssueClosable(id, issue, force); err != nil {
 				fmt.Fprintf(os.Stderr, "%s\n", err)
+				continue
+			}
+
+			// Already-closed issues must not take the normal path: the storage
+			// layer's close is a guarded UPDATE (WHERE status != closed) that
+			// silently affects zero rows, but the CLI then printed the ✓ line
+			// echoing the reason — reporting a write that never happened
+			// (aegis-arqu). This is exactly the command a stub-close-reason
+			// remediation sweep uses, so the whole sweep would "succeed" and
+			// change nothing. With an explicit --reason the intent is
+			// unambiguous: record it. Without one, say so and do nothing.
+			if issue != nil && issue.Status == types.StatusClosed {
+				if !explicitReason {
+					fmt.Fprintf(os.Stderr, "%s is already closed (close reason unchanged: %q)\n", id, issue.CloseReason)
+					alreadyClosedCount++
+					continue
+				}
+				if issue.CloseReason == reason {
+					fmt.Printf("%s %s already closed with this exact reason (unchanged)\n", ui.RenderPass("✓"), formatFeedbackID(id, issueTitleOrEmpty(issue)))
+					alreadyClosedCount++
+					continue
+				}
+				if err := activeStore.UpdateIssue(ctx, id, map[string]interface{}{"close_reason": reason}, actor); err != nil {
+					fmt.Fprintf(os.Stderr, "Error updating close reason for %s: %v\n", id, err)
+					continue
+				}
+				mutatedStores[activeStore] = append(mutatedStores[activeStore], id)
+				audit.LogFieldChange(id, "close_reason", issue.CloseReason, reason, actor, "re-close with new reason")
+				reasonUpdatedCount++
+				if jsonOutput {
+					if updated, _ := activeStore.GetIssue(ctx, id); updated != nil {
+						closedIssues = append(closedIssues, updated)
+					}
+				} else {
+					fmt.Printf("%s Updated close reason for %s (was: %q)\n", ui.RenderPass("✓"), formatFeedbackID(id, issueTitleOrEmpty(issue)), issue.CloseReason)
+				}
 				continue
 			}
 
@@ -261,7 +303,7 @@ the flags appear in the command line.`,
 			}
 		}
 
-		if closedCount > 0 {
+		if closedCount > 0 || reasonUpdatedCount > 0 {
 			for s, ids := range mutatedStores {
 				if s == nil {
 					continue
@@ -278,7 +320,7 @@ the flags appear in the command line.`,
 		// Exit non-zero if no issues were actually closed (close guard
 		// and other soft failures should surface as non-zero exit codes for scripting)
 		totalAttempted := len(resolvedIDs)
-		if totalAttempted > 0 && closedCount == 0 {
+		if totalAttempted > 0 && closedCount == 0 && reasonUpdatedCount == 0 && alreadyClosedCount == 0 {
 			os.Exit(1)
 		}
 	},
@@ -333,14 +375,18 @@ func (v *closeReasonFlagValue) Values() []string {
 	return out
 }
 
-func resolveCloseReasons(cmd *cobra.Command, args []string) ([]string, []string, error) {
+// resolveCloseReasons returns the close reasons, the (possibly trimmed) args,
+// and whether the caller EXPLICITLY provided a reason (vs the "Closed" stub
+// default). The distinction matters on an already-closed issue: an explicit
+// reason expresses intent to record it, a defaulted one does not (aegis-arqu).
+func resolveCloseReasons(cmd *cobra.Command, args []string) ([]string, []string, bool, error) {
 	reasons, err := collectCloseReasonFlags(cmd)
 	if err != nil {
-		return nil, args, err
+		return nil, args, false, err
 	}
 
 	if fileReason, ok, err := resolveReasonFile(cmd, len(reasons) > 0); err != nil {
-		return nil, args, err
+		return nil, args, false, err
 	} else if ok {
 		reasons = []string{fileReason}
 	}
@@ -352,13 +398,14 @@ func resolveCloseReasons(cmd *cobra.Command, args []string) ([]string, []string,
 		args = args[:len(args)-1]
 	}
 
+	explicit := len(reasons) > 0
 	if len(reasons) == 0 {
 		reasons = []string{"Closed"}
 	}
 	if len(reasons) > 1 && len(reasons) != len(args) {
-		return nil, args, fmt.Errorf("got %d close reasons for %d issue IDs; provide exactly one shared reason or one reason per issue", len(reasons), len(args))
+		return nil, args, explicit, fmt.Errorf("got %d close reasons for %d issue IDs; provide exactly one shared reason or one reason per issue", len(reasons), len(args))
 	}
-	return reasons, args, nil
+	return reasons, args, explicit, nil
 }
 
 func collectCloseReasonFlags(cmd *cobra.Command) ([]string, error) {
