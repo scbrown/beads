@@ -735,7 +735,7 @@ func (m migrationSource) bootstrapSQL() string {
 //
 // This deliberately does NOT use `SELECT ... FROM INFORMATION_SCHEMA.COLUMNS`:
 // Dolt does not push the predicate down and scans every column in the database
-// for that form, costing ~1.4s per call (measured against dolt.lan). Because
+// for that form, costing ~1.4s per call (measured against the shared Dolt server). Because
 // migrationWorkNeeded probes both cursor tables on EVERY write, that was ~2.9s —
 // roughly 95% — of `bd update`'s latency while a read paid none of it, the
 // asymmetry aegis-s9m7 was filed for. SHOW COLUMNS answers the same question in
