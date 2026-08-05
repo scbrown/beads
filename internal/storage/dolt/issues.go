@@ -44,11 +44,73 @@ func (s *DoltStore) CreateIssue(ctx context.Context, issue *types.Issue, actor s
 		return err
 	}
 
+	// The write REPORTED success; now find out whether the store HOLDS it.
+	// See verifyCreated — this is the whole point of aegis-nl5hc.
+	if err := s.verifyCreated(ctx, issue); err != nil {
+		return err
+	}
+
 	// Dolt versioning — wisps and no-history issues skip DOLT_COMMIT.
 	if !issue.Ephemeral && !issue.NoHistory {
 		if err := s.doltAddAndCommit(ctx, createIssueCommitTables(ctx, issue, result),
 			fmt.Sprintf("bd: create %s", issue.ID)); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// verifyCreated reads back the ids a create just minted and fails loudly if the
+// store does not hold them.
+//
+// WHY THIS EXISTS (aegis-nl5hc, from aegis-364b). `bd create` could mint an id,
+// fail to record it, and still report success: measured as `Error 1105: Field id
+// doesn't have a default value` after the id was minted, with no issue in the
+// store afterwards. A create that reports success while the store holds nothing
+// is the worst possible failure for a tracker — the caller books the work as
+// filed, and the only evidence it was not is an absence nobody goes looking for.
+//
+// The fleet's existing answer is a PROCEDURE (read the object back; since
+// aegis-nft1h read it twice with a gap). That procedure is correct and it
+// protects exactly the callers who remember it. This is the same check moved
+// INTO the tool, where forgetting is not an option — the same argument as
+// validating a pattern at emit time rather than trusting pattern authors.
+//
+// SCOPE, deliberately narrow: this answers "did the row land?", NOT "is every
+// field right?". A read-back that re-checked the whole issue would be a second
+// implementation of what was just written, and would fail on every legitimate
+// normalisation the write layer performs.
+//
+// This does NOT resolve the indeterminate-commit case (aegis-nmfq): when the
+// tx itself errors, `withRetryTx` has already returned and the write may still
+// have landed. That ambiguity is the caller's to resolve and the CLAUDE.md rule
+// still governs it. What this closes is the other half — the path that returns
+// NO error at all and still lost the write.
+func (s *DoltStore) verifyCreated(ctx context.Context, issues ...*types.Issue) error {
+	for _, issue := range issues {
+		if issue == nil || issue.ID == "" {
+			continue
+		}
+		issueTable, _ := issueops.TableRouting(issue)
+		var got string
+		//nolint:gosec // G201: issueTable comes from TableRouting, not from input
+		err := s.db.QueryRowContext(ctx,
+			fmt.Sprintf("SELECT id FROM %s WHERE id = ?", issueTable), issue.ID).Scan(&got)
+		switch {
+		case err == sql.ErrNoRows:
+			return fmt.Errorf(
+				"create of %s REPORTED SUCCESS BUT THE STORE DOES NOT HOLD IT: "+
+					"the id was minted and the row is absent from %s. Nothing was created; "+
+					"do not treat this id as filed (aegis-nl5hc)", issue.ID, issueTable)
+		case err != nil:
+			// The read-back itself failed, so we cannot say either way. Say THAT,
+			// rather than implying the write failed — reporting a landed write as
+			// lost is how duplicates get created (aegis-nft1h).
+			return fmt.Errorf(
+				"create of %s could not be verified: the write reported success but the "+
+					"read-back failed (%w). The issue MAY exist; check with `bd show %s` "+
+					"before retrying, because a blind retry duplicates (aegis-nl5hc)",
+				issue.ID, err, issue.ID)
 		}
 	}
 	return nil
@@ -97,10 +159,15 @@ func (s *DoltStore) CreateIssuesWithFullOptions(ctx context.Context, issues []*t
 				issue.Ephemeral = true
 			}
 		}
-		return s.withRetryTx(ctx, func(tx *sql.Tx) error {
+		if err := s.withRetryTx(ctx, func(tx *sql.Tx) error {
 			_, err := issueops.CreateIssuesInTxWithResult(ctx, tx, issues, actor, opts)
 			return err
-		})
+		}); err != nil {
+			return err
+		}
+		// Wisps take a different table and skip DOLT_COMMIT, but they are still
+		// minted ids a caller will act on, so they get the same read-back.
+		return s.verifyCreated(ctx, issues...)
 	}
 
 	var result issueops.CreateIssuesResult
@@ -109,6 +176,10 @@ func (s *DoltStore) CreateIssuesWithFullOptions(ctx context.Context, issues []*t
 		result, err = issueops.CreateIssuesInTxWithResult(ctx, tx, issues, actor, opts)
 		return err
 	}); err != nil {
+		return err
+	}
+
+	if err := s.verifyCreated(ctx, issues...); err != nil {
 		return err
 	}
 
