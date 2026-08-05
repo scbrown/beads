@@ -56,7 +56,11 @@ func testMainInner(m *testing.M) int {
 		testDoltPort = testutil.DoltContainerPortInt()
 	}
 
-	code := m.Run()
+	// Measured aegis-evl2h: 58 of 58 tests skipped here and the package reported
+	// PASS. `ok` on a run that reached no store is indistinguishable from a
+	// passing run, and this package is the protocol contract — the thing a
+	// reader would most want to trust.
+	code := testutil.FailIfNothingRan(m.Run())
 
 	os.Unsetenv("BEADS_DOLT_PORT")
 	os.Unsetenv("BEADS_TEST_MODE")
@@ -162,8 +166,13 @@ func newWorkspace(t *testing.T) *workspace {
 	t.Helper()
 	testutil.RequireDoltBinary(t)
 	if testDoltPort == 0 {
+		// Counted, so a run in which nothing reached a store cannot print `ok`
+		// (aegis-evl2h). Measured: this package skipped 58 of 58 and reported
+		// PASS — the live instance of that defect.
+		testutil.RecordTestSkipped()
 		t.Skip("skipping: test Dolt server not available")
 	}
+	testutil.RecordTestRan()
 	bd := buildBD(t)
 	dir := t.TempDir()
 	w := &workspace{dir: dir, bd: bd, t: t}
