@@ -228,7 +228,57 @@ func ensureSharedContainer() {
 // EnsureDoltContainerForTestMain starts a shared Dolt container for use in
 // TestMain functions. Call TerminateDoltContainer() after m.Run() to clean up.
 // Sets BEADS_DOLT_PORT process-wide.
+// externalDoltPort reads BEADS_TEST_DOLT_PORT: an ALREADY-RUNNING Dolt
+// sql-server to test against instead of starting a container.
+//
+// WHY THIS SEAM EXISTS (aegis-nl5hc). The Dolt tests are gated on Docker, and
+// this fleet's crew host has no Docker. The consequence is not that a few tests
+// are missing — it is that `go test ./internal/storage/dolt/` prints **ok** here
+// while every storage test SKIPS. A suite that reports success without
+// exercising the storage layer is the same defect this bead is about, one level
+// up: a report about what was ATTEMPTED rather than what was CHECKED.
+//
+// The server must be one the caller started for testing. Nothing here can tell
+// a scratch server from a production one, so the guard is the same as the
+// container path's: tests create their own uniquely-named database and never
+// touch an existing one.
+func externalDoltPort() string {
+	return strings.TrimSpace(os.Getenv("BEADS_TEST_DOLT_PORT"))
+}
+
 func EnsureDoltContainerForTestMain() error {
+	if port := externalDoltPort(); port != "" {
+		doltTestPort = port
+		// BOTH port variables, and the second one is the one that matters.
+		// `applyConfigDefaults` resolves the store's port from
+		// BEADS_DOLT_SERVER_PORT; on a crew host that is already set to the
+		// fleet's production port, so an explicit cfg.ServerPort is overwritten
+		// and the store dials PRODUCTION while the test believes it is talking
+		// to a scratch server. It surfaces as "server unreachable at :3306",
+		// which reads as "your test server is down" rather than "your test was
+		// pointed at prod" — the more dangerous of the two readings, and the
+		// reason this sets it rather than documenting it.
+		for k, v := range map[string]string{
+			"BEADS_DOLT_PORT":        port,
+			"BEADS_DOLT_SERVER_PORT": port,
+			"BEADS_DOLT_SERVER_HOST": "127.0.0.1",
+			"BEADS_DOLT_HOST":        "127.0.0.1",
+		} {
+			if err := os.Setenv(k, v); err != nil {
+				// Refuse rather than run: a partially-pinned environment is the
+				// dangerous state, not a safe one — it is what aims tests at
+				// production.
+				return fmt.Errorf("pinning %s for the external test server: %w", k, err)
+			}
+		}
+		// And the HOST, for the same reason and with a worse failure mode: a
+		// crew host has BEADS_DOLT_SERVER_HOST pointing at the fleet's Dolt, so
+		// pinning only the port aims the tests at PRODUCTION-on-a-scratch-port.
+		// Measured while building this seam — the tests dialed dolt.lan:3399
+		// and would have dialed dolt.lan:3306 had the port not been pinned
+		// first. Both variables have to be overridden or neither is safe.
+		return nil
+	}
 	if state := checkDolt(); state != doltReady {
 		return fmt.Errorf("%s", state)
 	}
@@ -270,6 +320,11 @@ func DoltContainerPortInt() int {
 // TerminateDoltContainer stops and removes the shared Dolt container.
 // Called from TestMain after m.Run().
 func TerminateDoltContainer() {
+	// An externally-supplied server is not ours to stop — the caller started it
+	// and may be running several packages against it.
+	if externalDoltPort() != "" {
+		return
+	}
 	terminateSharedContainer()
 }
 
