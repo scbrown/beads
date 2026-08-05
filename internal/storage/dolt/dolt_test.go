@@ -65,8 +65,12 @@ func skipIfNoDolt(t *testing.T) {
 	t.Helper()
 	testutil.RequireDoltBinary(t)
 	if testServerPort == 0 {
+		// Counted, not just skipped: TestMain refuses to report `ok` for a run
+		// in which nothing reached a store (aegis-nl5hc).
+		testutil.RecordTestSkipped()
 		t.Skip("Test Dolt server not running, skipping test")
 	}
+	testutil.RecordTestRan()
 }
 
 // uniqueTestDBName generates a unique database name for test isolation.

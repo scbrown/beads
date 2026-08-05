@@ -51,7 +51,10 @@ func testMainInner(m *testing.M) int {
 		}
 	}
 
-	code := m.Run()
+	// A suite in which every test SKIPPED must not exit 0 — `ok` there is
+	// indistinguishable from a passing run, on a package whose whole subject is
+	// a tool that reported success without doing the work (aegis-nl5hc).
+	code := testutil.FailIfNothingRan(m.Run())
 
 	testServerPort = 0
 	os.Unsetenv("BEADS_DOLT_PORT")

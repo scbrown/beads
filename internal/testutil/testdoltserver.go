@@ -5,6 +5,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -246,6 +247,59 @@ func externalDoltPort() string {
 	return strings.TrimSpace(os.Getenv("BEADS_TEST_DOLT_PORT"))
 }
 
+// assertLoopbackTestServer REFUSES to run the suite unless the Dolt the tests
+// will reach is on this machine.
+//
+// WHY A REFUSAL AND NOT A DOC (aegis-nl5hc). The environment that decides where
+// tests connect is inherited: a crew host exports host and port pointing at a
+// live shared store, so a harness that pins only ONE of them silently aims a
+// test suite — which creates databases, writes rows and DELETEs them — at
+// production. Measured: pinning the port alone produced connections to the
+// production HOST on the scratch port.
+//
+// A harness that can be pointed at a live store by omitting one variable has a
+// safety catch made of attentiveness. This is the catch made of code: whatever
+// the environment says, if the resolved host is not loopback the suite does not
+// run.
+//
+// Loopback rather than a named production host on purpose. Naming the estate's
+// hosts in a public repo is its own leak (there is a guard in this tree for
+// exactly that), and an allowlist of "known bad" hosts fails open for every
+// host nobody thought of. "A test server is local" fails CLOSED.
+func assertLoopbackTestServer() error {
+	for _, key := range []string{"BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_HOST"} {
+		host := strings.TrimSpace(os.Getenv(key))
+		if host == "" {
+			continue
+		}
+		if !isLoopbackHost(host) {
+			return fmt.Errorf(
+				"REFUSING to run tests: %s resolves to %q, which is not loopback. "+
+					"This suite creates databases, writes rows and deletes them; against a "+
+					"shared store that is data loss. Point it at a local dolt sql-server "+
+					"(aegis-nl5hc)", key, host)
+		}
+	}
+	return nil
+}
+
+// isLoopbackHost reports whether a host string names this machine.
+func isLoopbackHost(host string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	// A name we cannot parse as an IP is not demonstrably local. Refuse rather
+	// than resolve it: DNS would make the answer depend on the network, and the
+	// safe reading of "I am not sure" here is no.
+	return false
+}
+
 func EnsureDoltContainerForTestMain() error {
 	if port := externalDoltPort(); port != "" {
 		doltTestPort = port
@@ -272,12 +326,17 @@ func EnsureDoltContainerForTestMain() error {
 			}
 		}
 		// And the HOST, for the same reason and with a worse failure mode: a
-		// crew host has BEADS_DOLT_SERVER_HOST pointing at the fleet's Dolt, so
-		// pinning only the port aims the tests at PRODUCTION-on-a-scratch-port.
-		// Measured while building this seam — the tests dialed dolt.lan:3399
-		// and would have dialed dolt.lan:3306 had the port not been pinned
-		// first. Both variables have to be overridden or neither is safe.
-		return nil
+		// crew host has BEADS_DOLT_SERVER_HOST pointing at a live shared Dolt,
+		// so pinning only the port aims the tests at PRODUCTION-on-a-scratch-
+		// port. Measured while building this seam: the tests dialed the
+		// production host on the scratch port, and would have dialed it on the
+		// production port had the port not been pinned first. Both variables
+		// have to be overridden or neither is safe.
+		//
+		// Pinning is not enough on its own. It is one edit away from being
+		// half-applied again, and the failure is silent in the direction of
+		// writing to a live store — so the pin is VERIFIED, not trusted.
+		return assertLoopbackTestServer()
 	}
 	if state := checkDolt(); state != doltReady {
 		return fmt.Errorf("%s", state)
@@ -355,4 +414,66 @@ func DoltContainerCrashError() error {
 		return fmt.Errorf("Dolt container exited (status=%s, exit=%d)", state.Status, state.ExitCode)
 	}
 	return nil
+}
+
+// ── A suite that evaluated nothing must not print `ok` (aegis-nl5hc) ────────
+//
+// `go test` exits 0 when every test SKIPS, and `ok <pkg>` is what a human and a
+// CI grep both read as "the storage layer passed". On a Docker-less host that
+// is the whole Dolt suite: 100% skipped, exit 0, indistinguishable from 100%
+// passed. It is the same defect as the tool this bead is about — a report about
+// what was attempted rather than what was checked — and it is worse here,
+// because it is the instrument someone would use to VERIFY that tool.
+//
+// Counters, not heuristics: a test that reaches a store increments Ran, one
+// that gives up increments Skipped, and the package's TestMain calls
+// FailIfNothingRan before returning.
+
+var (
+	testsRan     int
+	testsSkipped int
+	testCountMu  sync.Mutex
+)
+
+// RecordTestRan marks that a test actually reached a live store.
+func RecordTestRan() {
+	testCountMu.Lock()
+	defer testCountMu.Unlock()
+	testsRan++
+}
+
+// RecordTestSkipped marks that a test gave up before reaching a store.
+func RecordTestSkipped() {
+	testCountMu.Lock()
+	defer testCountMu.Unlock()
+	testsSkipped++
+}
+
+// FailIfNothingRan converts "everything skipped" into a FAILING exit code, so a
+// suite that evaluated nothing cannot print `ok`.
+//
+// Returns the code TestMain should exit with. A non-zero `code` is passed
+// through untouched — a real failure must not be relabelled by this.
+func FailIfNothingRan(code int) int {
+	testCountMu.Lock()
+	ran, skipped := testsRan, testsSkipped
+	testCountMu.Unlock()
+
+	if code != 0 {
+		return code
+	}
+	if ran == 0 && skipped > 0 {
+		fmt.Fprintf(os.Stderr,
+			"\nFAIL: %d test(s) SKIPPED and ZERO ran — this suite evaluated NOTHING.\n"+
+				"      `ok` here would be indistinguishable from a passing run (aegis-nl5hc).\n"+
+				"      Start a local dolt sql-server and set BEADS_TEST_DOLT_PORT, or set\n"+
+				"      BEADS_TEST_SKIP=dolt to declare the skip deliberately.\n", skipped)
+		return 1
+	}
+	if ran > 0 && skipped > 0 {
+		// Not a failure, but the count must be visible: a partial skip is how a
+		// suite quietly stops covering the thing you are about to trust it for.
+		fmt.Fprintf(os.Stderr, "NOTE: %d test(s) ran, %d skipped.\n", ran, skipped)
+	}
+	return code
 }
