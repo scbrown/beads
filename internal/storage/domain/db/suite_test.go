@@ -44,7 +44,12 @@ func (s *testSuite) SetupSuite() {
 	s.Require().NoError(db.PingContext(ctx))
 	s.db = db
 
-	_, err = schema.MigrateUp(ctx, db)
+	// Pin: the pooled *sql.DB makes @user-guarded migrations silently no-op
+	// and report success, which MigrateUp refuses (aegis-pakar).
+	migrateConn, migrateErr := db.Conn(ctx)
+	s.Require().NoError(migrateErr, "pinning the migration connection")
+	defer migrateConn.Close()
+	_, err = schema.MigrateUp(ctx, migrateConn)
 	s.Require().NoError(err, "applying beads schema")
 
 	_, err = db.ExecContext(ctx, "CALL DOLT_ADD('-A')")

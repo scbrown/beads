@@ -161,7 +161,7 @@ func TestAuxRowIDRekeyConvergesIndependentClones(t *testing.T) {
 			wantComments, wantEvents := expectedAuxRekeyIDs()
 			seedAuxRekeyFixture(ctx, t, store.db, tc.prefix)
 
-			if _, err := schema.MigrateUp(ctx, store.db); err != nil {
+			if _, err := migrateUpPinned(ctx, store.db); err != nil {
 				t.Fatalf("MigrateUp: %v", err)
 			}
 
@@ -183,7 +183,7 @@ func TestAuxRowIDRekeyConvergesIndependentClones(t *testing.T) {
 			}
 
 			// Steady state: another MigrateUp must not touch the ids.
-			if _, err := schema.MigrateUp(ctx, store.db); err != nil {
+			if _, err := migrateUpPinned(ctx, store.db); err != nil {
 				t.Fatalf("second MigrateUp: %v", err)
 			}
 			if got := readIDs(ctx, t, store.db, "comments"); !equalStrings(got, wantComments) {
@@ -240,7 +240,7 @@ func TestAuxRowIDRekeyAdoptionRecordsMarkerWithoutRewrite(t *testing.T) {
 		t.Fatalf("regress ignored cursor: %v", err)
 	}
 
-	if _, err := schema.MigrateUp(ctx, store.db); err != nil {
+	if _, err := migrateUpPinned(ctx, store.db); err != nil {
 		t.Fatalf("MigrateUp: %v", err)
 	}
 
@@ -261,4 +261,16 @@ func TestAuxRowIDRekeyAdoptionRecordsMarkerWithoutRewrite(t *testing.T) {
 	if markerCount != 1 {
 		t.Errorf("marker version %d recorded %d times, want 1", auxRekeyMarkerVersion, markerCount)
 	}
+}
+
+// migrateUpPinned runs MigrateUp on a PINNED connection, as both production
+// callers do. Passing the pooled *sql.DB makes @user-guarded migrations
+// silently no-op and report success, which MigrateUp now refuses (aegis-pakar).
+func migrateUpPinned(ctx context.Context, db *sql.DB) (int, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	return schema.MigrateUp(ctx, conn)
 }

@@ -48,7 +48,16 @@ func TestMigrateUpRunsWithoutAdvisoryLock(t *testing.T) {
 
 	expectOnePendingMigration(t, mock)
 
-	applied, err := MigrateUp(context.Background(), db)
+	// Pin, as both production callers do. Passing the *sql.DB here is what
+	// aegis-pakar is about, and MigrateUp now refuses it.
+	pinCtx := context.Background()
+	conn, err := db.Conn(pinCtx)
+	if err != nil {
+		t.Fatalf("pin connection: %v", err)
+	}
+	defer conn.Close()
+
+	applied, err := MigrateUp(pinCtx, conn)
 	if err != nil {
 		t.Fatalf("MigrateUp() error = %v", err)
 	}
@@ -100,6 +109,14 @@ func expectOnePendingMigration(t *testing.T, mock sqlmock.Sqlmock) {
 
 	latest := LatestVersion()
 	latestIgnored := LatestIgnoredVersion()
+
+	// MigrateUp asserts the connection is pinned before doing anything
+	// (aegis-pakar): a pooled handle makes @user-guarded migrations silently
+	// no-op. The mock has to answer the probe.
+	mock.ExpectExec(`SET @beads_pin_probe`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT @beads_pin_probe`).
+		WillReturnRows(sqlmock.NewRows([]string{"v"}).AddRow(0x5ED9))
+	mock.ExpectExec(`SET @beads_pin_probe = NULL`).WillReturnResult(sqlmock.NewResult(0, 0))
 
 	expectScalar(mock, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations", "version", latest-1)
 	expectDoltStatusRows(mock)

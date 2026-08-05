@@ -255,6 +255,13 @@ func MigrateUpTo(ctx context.Context, db DBConn, maxVersion int) (int, error) {
 }
 
 func MigrateUp(ctx context.Context, db DBConn) (int, error) {
+	// Before anything: prove session state survives between statements. A
+	// pooled handle makes every @var-guarded migration silently no-op and still
+	// report success (aegis-pakar).
+	if err := assertSessionPinned(ctx, db); err != nil {
+		return 0, err
+	}
+
 	needed, err := migrationWorkNeeded(ctx, db)
 	if err != nil {
 		return 0, fmt.Errorf("checking schema migration work: %w", err)

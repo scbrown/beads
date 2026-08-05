@@ -377,7 +377,14 @@ func TestSeedProductionShapeFullSmallIssueCountRealSchema(t *testing.T) {
 	db.SetMaxOpenConns(1)
 	defer db.Close()
 
-	if _, err := schema.MigrateUp(ctx, db); err != nil {
+	// Pin: the pooled *sql.DB makes @user-guarded migrations silently no-op
+	// and report success, which MigrateUp refuses (aegis-pakar).
+	migrateConn, migrateErr := db.Conn(ctx)
+	if migrateErr != nil {
+		t.Fatalf("pin connection: %v", migrateErr)
+	}
+	defer migrateConn.Close()
+	if _, err := schema.MigrateUp(ctx, migrateConn); err != nil {
 		t.Fatalf("migrate schema: %v", err)
 	}
 
