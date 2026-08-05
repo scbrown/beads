@@ -1,0 +1,254 @@
+{
+  "environment": {
+    "docker": false,
+    "dolt_binary": true,
+    "external_dolt": false,
+    "skip_list": ""
+  },
+  "packages": {
+    "github.com/steveyegge/beads": {
+      "ran": 6,
+      "skipped": 6
+    },
+    "github.com/steveyegge/beads/cmd/bd": {
+      "ran": 2501,
+      "skipped": 413
+    },
+    "github.com/steveyegge/beads/cmd/bd/doctor": {
+      "ran": 698,
+      "skipped": 58
+    },
+    "github.com/steveyegge/beads/cmd/bd/doctor/fix": {
+      "ran": 232,
+      "skipped": 17
+    },
+    "github.com/steveyegge/beads/cmd/bd/protocol": {
+      "ran": 0,
+      "skipped": 58
+    },
+    "github.com/steveyegge/beads/cmd/bd/setup": {
+      "ran": 223,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/format": {
+      "ran": 21,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/ado": {
+      "ran": 566,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/atomicfile": {
+      "ran": 9,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/audit": {
+      "ran": 3,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/beads": {
+      "ran": 173,
+      "skipped": 1
+    },
+    "github.com/steveyegge/beads/internal/compact": {
+      "ran": 47,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/config": {
+      "ran": 252,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/configfile": {
+      "ran": 120,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/debug": {
+      "ran": 18,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/doltserver": {
+      "ran": 173,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/formula": {
+      "ran": 335,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/git": {
+      "ran": 25,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/github": {
+      "ran": 66,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/gitlab": {
+      "ran": 115,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/hooks": {
+      "ran": 24,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/idgen": {
+      "ran": 1,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/jira": {
+      "ran": 108,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/linear": {
+      "ran": 152,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/lockfile": {
+      "ran": 12,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/molecules": {
+      "ran": 3,
+      "skipped": 2
+    },
+    "github.com/steveyegge/beads/internal/notion": {
+      "ran": 35,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/query": {
+      "ran": 118,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/recipes": {
+      "ran": 9,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/remotecache": {
+      "ran": 116,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/routing": {
+      "ran": 17,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage": {
+      "ran": 44,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/dberrors": {
+      "ran": 2,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/dbproxy/pidfile": {
+      "ran": 2,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/dbproxy/proxy": {
+      "ran": 18,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/dbproxy/server": {
+      "ran": 80,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/depid": {
+      "ran": 3,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/dolt": {
+      "ran": 362,
+      "skipped": 417
+    },
+    "github.com/steveyegge/beads/internal/storage/doltutil": {
+      "ran": 64,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/domain/db": {
+      "ran": 2,
+      "skipped": 1
+    },
+    "github.com/steveyegge/beads/internal/storage/domain/fs": {
+      "ran": 48,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/domain/git": {
+      "ran": 25,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/embeddeddolt": {
+      "ran": 22,
+      "skipped": 25
+    },
+    "github.com/steveyegge/beads/internal/storage/issueops": {
+      "ran": 186,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/kvkeys": {
+      "ran": 1,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/rowid": {
+      "ran": 4,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/schema": {
+      "ran": 78,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/sqlbuild": {
+      "ran": 7,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/storage/uow": {
+      "ran": 34,
+      "skipped": 2
+    },
+    "github.com/steveyegge/beads/internal/storage/versioncontrolops": {
+      "ran": 6,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/templates/agents": {
+      "ran": 40,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/testutil": {
+      "ran": 6,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/timeparsing": {
+      "ran": 60,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/tracker": {
+      "ran": 35,
+      "skipped": 59
+    },
+    "github.com/steveyegge/beads/internal/types": {
+      "ran": 283,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/ui": {
+      "ran": 94,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/internal/utils": {
+      "ran": 179,
+      "skipped": 10
+    },
+    "github.com/steveyegge/beads/internal/validation": {
+      "ran": 195,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/scripts": {
+      "ran": 4,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/scripts/bench-ready-indexes": {
+      "ran": 4,
+      "skipped": 0
+    },
+    "github.com/steveyegge/beads/scripts/repro-dolt-prod-timeouts": {
+      "ran": 19,
+      "skipped": 0
+    }
+  }
+}
