@@ -33,9 +33,19 @@ Examples:
 		// Determine comment text from args, stdin, or file
 		stdinFlag, _ := cmd.Flags().GetBool("stdin")
 		fileFlag, _ := cmd.Flags().GetString("file")
+		// aegis-hrek7: -m/--message is the near-universal convention (git commit -m,
+		// gh issue comment -m), so reaching for it here is the natural error. Before
+		// this it was an unknown-shorthand error: loud and non-zero, but it still cost
+		// three comments in one session because it sat in an unchecked command chain
+		// whose NEXT step (a status change) succeeded — leaving beads moved with the
+		// reason evaporated. Accepting it removes the failure mode rather than
+		// improving the message about it.
+		msgFlag, _ := cmd.Flags().GetString("message")
 
 		var commentText string
 		switch {
+		case msgFlag != "":
+			commentText = msgFlag
 		case stdinFlag:
 			content, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -105,6 +115,7 @@ Examples:
 }
 
 func init() {
+	commentCmd.Flags().StringP("message", "m", "", "Comment text (alias for the positional form; aegis-hrek7)")
 	commentCmd.Flags().Bool("stdin", false, "Read comment text from stdin")
 	commentCmd.Flags().String("file", "", "Read comment text from file")
 	commentCmd.MarkFlagsMutuallyExclusive("stdin", "file")
