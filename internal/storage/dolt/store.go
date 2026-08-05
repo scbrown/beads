@@ -918,20 +918,37 @@ func applyConfigDefaults(cfg *Config) {
 			cfg.ServerHost = "127.0.0.1"
 		}
 	}
-	// Port resolution: BEADS_DOLT_SERVER_PORT env (or legacy BEADS_DOLT_PORT) >
+	// Port resolution: an explicitly-set cfg.ServerPort >
+	// BEADS_DOLT_SERVER_PORT env (or legacy BEADS_DOLT_PORT) >
 	// BEADS_TEST_MODE guard > metadata config > default.
 	// CRITICAL: BEADS_TEST_MODE=1 forces port 1 (immediate fail) if the resolved port
 	// is the production port (DefaultSQLPort). This prevents test databases from leaking
 	// onto production even when the port env var is set to 3307 by the orchestrator's beads module.
 	// Only an explicit non-production port (e.g., 43211 for a test server)
 	// overrides test mode — that's a deliberate test server assignment.
-	envPort := os.Getenv("BEADS_DOLT_SERVER_PORT")
-	if envPort == "" {
-		envPort = os.Getenv("BEADS_DOLT_PORT") // legacy fallback
-	}
-	if envPort != "" {
-		if p, err := strconv.Atoi(envPort); err == nil && p > 0 {
-			cfg.ServerPort = p
+	//
+	// An explicitly-set port wins over ambient env, matching ServerHost just
+	// above and the contract the callers already assume (aegis-4mzlq). This
+	// assignment used to be unconditional, so a caller that had deliberately
+	// chosen a port — `bd init --server-port`, or the global-database config
+	// copying the project's already-resolved port — was silently redirected by
+	// whatever the environment happened to export. Two configs built in one
+	// process could therefore address two different servers.
+	//
+	// This does NOT weaken the env override for the callers that rely on it:
+	// the resolver path below, and doltserver.DefaultConfig used by
+	// cmd/bd/main.go, open.go and doctor/federation.go, consult
+	// BEADS_DOLT_SERVER_PORT first and fold it in before the port ever reaches
+	// this function. For them an explicit port already IS the env port.
+	if cfg.ServerPort == 0 {
+		envPort := os.Getenv("BEADS_DOLT_SERVER_PORT")
+		if envPort == "" {
+			envPort = os.Getenv("BEADS_DOLT_PORT") // legacy fallback
+		}
+		if envPort != "" {
+			if p, err := strconv.Atoi(envPort); err == nil && p > 0 {
+				cfg.ServerPort = p
+			}
 		}
 	}
 	// If env var didn't provide a port, consult the full resolution chain:

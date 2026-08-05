@@ -294,11 +294,30 @@ func TestApplyConfigDefaults_TestModeBlocksProdPort(t *testing.T) {
 	}
 }
 
-// TestApplyConfigDefaults_EnvOverridesConfig verifies that BEADS_DOLT_PORT
-// overrides a port already set by metadata.json, even outside test mode.
-// This is the fix for hq-27t (test pollution): callers like the orchestrator set
-// BEADS_DOLT_PORT to route bd to a test server instead of production.
-func TestApplyConfigDefaults_EnvOverridesConfig(t *testing.T) {
+// TestApplyConfigDefaults_ExplicitPortBeatsEnv: an explicitly-set port is NOT
+// overridden by ambient BEADS_DOLT_PORT.
+//
+// INVERTED in aegis-4mzlq, deliberately. This test previously asserted the
+// opposite — that env always wins — for hq-27t (test pollution): an orchestrator
+// exports BEADS_DOLT_PORT to route bd to a test server rather than production.
+//
+// That protection is real and has NOT been dropped; it was simply never the job
+// of this assignment. Every live path that can carry a config-file port into
+// cfg.ServerPort — doltserver.DefaultConfig, bootstrap.go's resolver, open.go,
+// cmd/bd/main.go, doctor/federation.go — consults BEADS_DOLT_SERVER_PORT and
+// BEADS_DOLT_PORT FIRST and returns early. So a metadata-derived port reaches
+// applyConfigDefaults only as ServerPort == 0, already env-resolved, and the
+// unconditional assignment here was redundant for the case it was written for.
+// TestOrchestratorCanStillSteerBdAwayFromProduction covers that case through the
+// shape real callers actually use.
+//
+// What the old assertion DID do was overwrite a caller's deliberate choice:
+// `bd init --server-port`, or initGlobalDatabaseConfig copying the project's
+// already-resolved port, so that two configs built in one process could address
+// two different servers. The comment it carried ("simulate metadata.json having
+// set port") named a state no live caller produces — a config-file value
+// arriving as an explicit field, indistinguishable from an intentional one.
+func TestApplyConfigDefaults_ExplicitPortBeatsEnv(t *testing.T) {
 	origTestMode := os.Getenv("BEADS_TEST_MODE")
 	origPort := os.Getenv("BEADS_DOLT_PORT")
 	defer func() {
@@ -317,13 +336,16 @@ func TestApplyConfigDefaults_EnvOverridesConfig(t *testing.T) {
 	os.Unsetenv("BEADS_TEST_MODE") // NOT in test mode
 	os.Setenv("BEADS_DOLT_PORT", "19999")
 
-	// Simulate metadata.json having set port to production default
-	cfg := &Config{ServerPort: DefaultSQLPort}
+	// A caller that deliberately chose a port. Not the production default —
+	// using DefaultSQLPort here is what made the old test read as "metadata
+	// said production" rather than "the caller asked for this".
+	const chosen = 43211
+	cfg := &Config{ServerPort: chosen}
 	applyConfigDefaults(cfg)
 
-	if cfg.ServerPort != 19999 {
-		t.Errorf("expected BEADS_DOLT_PORT=19999 to override config port %d, got %d",
-			DefaultSQLPort, cfg.ServerPort)
+	if cfg.ServerPort != chosen {
+		t.Errorf("ambient BEADS_DOLT_PORT=19999 overrode a deliberately chosen port %d, got %d",
+			chosen, cfg.ServerPort)
 	}
 }
 
