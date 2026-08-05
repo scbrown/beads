@@ -960,6 +960,20 @@ func applyConfigDefaults(cfg *Config) {
 		if cfg.ServerPort == 0 || cfg.ServerPort == DefaultSQLPort {
 			cfg.ServerPort = 1
 		}
+		// PORT IS THE WRONG THING TO CHECK (aegis-4mzlq). The guard above is a
+		// denylist of one port, and it defends `DefaultSQLPort` — which is not
+		// necessarily the port the deployment's real server listens on. Measured
+		// on this fleet: production Dolt runs on a DIFFERENT port, so the check
+		// above would not have fired, and a test run reached the production HOST
+		// on a scratch port with the guard sitting right here.
+		//
+		// A host is either this machine or it is somebody else's data. That
+		// question needs no list and cannot rot as ports move, so it is asked
+		// instead of enumerating. Fail CLOSED: an unparseable host is not
+		// demonstrably local, so it is refused rather than resolved.
+		if !isLocalDoltHost(cfg.ServerHost) {
+			cfg.ServerPort = 1
+		}
 	}
 	if cfg.ServerUser == "" {
 		cfg.ServerUser = "root"
@@ -3105,3 +3119,29 @@ type DoltStatus = storage.Status
 
 // StatusEntry is an alias for storage.StatusEntry.
 type StatusEntry = storage.StatusEntry
+
+// isLocalDoltHost reports whether a host names this machine.
+//
+// Used by the BEADS_TEST_MODE guard in applyConfigDefaults to decide whether a
+// test run is allowed to reach a store at all. Empty is treated as local
+// because the resolution above defaults an unset host to loopback.
+//
+// Fails CLOSED: a name that does not parse as a loopback IP is refused rather
+// than resolved through DNS, which would make the verdict depend on the
+// network. "Not sure whether this is production" has one safe reading.
+func isLocalDoltHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return true
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
