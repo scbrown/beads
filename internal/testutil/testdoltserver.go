@@ -336,7 +336,16 @@ func EnsureDoltContainerForTestMain() error {
 		// Pinning is not enough on its own. It is one edit away from being
 		// half-applied again, and the failure is silent in the direction of
 		// writing to a live store — so the pin is VERIFIED, not trusted.
-		return assertLoopbackTestServer()
+		if err := assertLoopbackTestServer(); err != nil {
+			return err
+		}
+		// The server is ours; is its CLOCK usable? A non-UTC server produces
+		// "not found" test failures rather than a clock error (aegis-clw7w).
+		p, convErr := strconv.Atoi(port)
+		if convErr != nil {
+			return fmt.Errorf("BEADS_TEST_DOLT_PORT %q is not a port number: %w", port, convErr)
+		}
+		return assertUTCTestServer(p)
 	}
 	if state := checkDolt(); state != doltReady {
 		return fmt.Errorf("%s", state)
