@@ -89,6 +89,9 @@ func assertDatabaseNotExists(t *testing.T, port int, dbName string) {
 
 func createTestDatabase(t *testing.T, port int, dbName string) {
 	t.Helper()
+	// Idempotent: clear any leftover from a previous run against a persistent
+	// server before creating, so this cannot fail with "database exists".
+	ensureDatabaseAbsent(t, port, dbName)
 	db := rawTestConn(t, port)
 	defer db.Close()
 
@@ -97,11 +100,39 @@ func createTestDatabase(t *testing.T, port int, dbName string) {
 	}
 }
 
+// dropTestDatabase removes a test database if it is present.
+//
+// This was a NO-OP, on the reasoning that "orphan databases are cleaned up when
+// the container terminates" (aegis-ejq5v). True for a container, and the whole
+// bug for anything else: the names here are deterministic — test_guard_*_<port>
+// — so against a PERSISTENT server on a fixed port the second run finds every
+// name already taken and dies with "database exists". Measured on a local
+// sql-server: run one clean, run two six failures.
+//
+// The original concern is real and is respected: a rapid burst of DROPs crashes
+// the Dolt test container. So this drops only what actually EXISTS. On a fresh
+// container nothing does, so this issues ZERO drops and the container path is
+// bit-for-bit unchanged. On a persistent server it issues at most one drop per
+// stale name, at setup — bounded, and not the teardown burst that caused the
+// crash.
 func dropTestDatabase(t *testing.T, port int, dbName string) {
-	// No-op: rapid DROP DATABASE crashes the Dolt test container.
-	// Orphan databases are cleaned up when the container terminates.
-	_ = port
-	_ = dbName
+	t.Helper()
+	if !databaseExists(t, port, dbName) {
+		return
+	}
+	db := rawTestConn(t, port)
+	defer db.Close()
+	if _, err := db.Exec(fmt.Sprintf("DROP DATABASE `%s`", dbName)); err != nil {
+		t.Fatalf("failed to drop leftover database %q: %v", dbName, err)
+	}
+}
+
+// ensureDatabaseAbsent clears a leftover database so a test starts from a known
+// state. Call it BEFORE assertDatabaseNotExists, never instead of it — an
+// assertion that makes itself true checks nothing.
+func ensureDatabaseAbsent(t *testing.T, port int, dbName string) {
+	t.Helper()
+	dropTestDatabase(t, port, dbName)
 }
 
 func containsAny(s string, substrs ...string) bool {
@@ -136,6 +167,7 @@ func TestCreateGuard_MissingDB_DefaultConfig(t *testing.T) {
 	ctx := context.Background()
 	dbName := fmt.Sprintf("test_guard_missing_%d", testServerPort)
 
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 
 	cfg := &Config{
@@ -157,6 +189,7 @@ func TestCreateGuard_MissingDB_DefaultConfig(t *testing.T) {
 	}
 
 	// Verify the database was NOT created as a side effect
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 }
 
@@ -169,6 +202,7 @@ func TestCreateGuard_MissingDB_CreateIfMissing(t *testing.T) {
 	ctx := context.Background()
 	dbName := fmt.Sprintf("test_guard_create_%d", testServerPort)
 
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 	t.Cleanup(func() { dropTestDatabase(t, testServerPort, dbName) })
 
@@ -316,6 +350,7 @@ func TestCreateGuard_ReadOnly_MissingDB(t *testing.T) {
 
 	ctx := context.Background()
 	dbName := fmt.Sprintf("test_guard_readonly_%d", testServerPort)
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 
 	cfg := &Config{
@@ -337,6 +372,7 @@ func TestCreateGuard_ReadOnly_MissingDB(t *testing.T) {
 		t.Errorf("error should indicate database not found, got: %v", err)
 	}
 
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 }
 
@@ -356,6 +392,7 @@ func TestCreateGuard_UnderscoreInName(t *testing.T) {
 	t.Cleanup(func() { dropTestDatabase(t, testServerPort, similarName) })
 
 	// Target database does NOT exist — only the similar-named one does
+	ensureDatabaseAbsent(t, testServerPort, targetName)
 	assertDatabaseNotExists(t, testServerPort, targetName)
 
 	cfg := &Config{
@@ -423,6 +460,7 @@ func TestCreateGuard_ErrorMessage(t *testing.T) {
 
 	ctx := context.Background()
 	dbName := fmt.Sprintf("test_guard_errmsg_%d", testServerPort)
+	ensureDatabaseAbsent(t, testServerPort, dbName)
 	assertDatabaseNotExists(t, testServerPort, dbName)
 
 	cfg := &Config{
