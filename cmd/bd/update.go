@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -66,6 +67,34 @@ create, update, show, or close operation).`,
 				FatalErrorRespectJSON("invalid status %q (built-in: open, in_progress, blocked, deferred, closed, pinned, hooked; or configure custom statuses via 'bd config set status.custom')", status)
 			}
 			updates["status"] = status
+
+			// aegis-jawbv ask 1+3: refuse a BARE blocked. A blocked bead with nothing
+			// able to clear it is invisible work: measured 2026-08-03, 11 of 15 blocked
+			// beads had NO dependency at all, ages 10-41 days. Require one of the three
+			// things that can re-ask: a dependency, a decision owner, or a re-test date.
+			// An upstream bug in a pinned dependency never self-clears — aegis-lmi waited
+			// 37 days on one whose re-test took ten minutes.
+			if status == string(types.StatusBlocked) {
+				retest, _ := cmd.Flags().GetString("retest")
+				if retest != "" {
+					if _, err := time.Parse("2006-01-02", retest); err != nil {
+						FatalErrorRespectJSON("--retest must be YYYY-MM-DD (got %q)", retest)
+					}
+					addl, _ := cmd.Flags().GetStringSlice("add-label")
+					updates["add_labels"] = append(addl, "retest:"+retest)
+				}
+				for _, id := range args {
+					if blockedHasAnEscape(rootCtx, id, retest, cmd) {
+						continue
+					}
+					FatalErrorRespectJSON("refusing a bare BLOCKED on %s: nothing would ever re-ask.\n"+
+						"  Give it one of:\n"+
+						"    a dependency      bd dep add %s <blocker>\n"+
+						"    a decision owner  bd update %s --assignee <who> --add-label decision-needed\n"+
+						"    a re-test date    bd update %s --status blocked --retest YYYY-MM-DD\n"+
+						"  Whichever you give becomes the thing that re-asks (aegis-jawbv).", id, id, id, id)
+				}
+			}
 
 			// If status is being set to closed, include session if provided
 			if status == "closed" {
@@ -642,8 +671,38 @@ func toJSONValue(s string) json.RawMessage {
 	return json.RawMessage(b)
 }
 
+// blockedHasAnEscape reports whether this bead has something that can eventually
+// clear it: a real dependency, a decision owner (a decision-* label), or a re-test
+// date. Fails OPEN on a store error — refusing an update because the store hiccuped
+// would be worse than the invisible-blocked state this guards against.
+func blockedHasAnEscape(ctx context.Context, id, retest string, cmd *cobra.Command) bool {
+	if retest != "" {
+		return true
+	}
+	if store == nil {
+		return true
+	}
+	if deps, err := store.GetDependencies(ctx, id); err == nil && len(deps) > 0 {
+		return true
+	} else if err != nil {
+		return true
+	}
+	labels, err := store.GetLabels(ctx, id)
+	if err != nil {
+		return true
+	}
+	add, _ := cmd.Flags().GetStringSlice("add-label")
+	for _, l := range append(labels, add...) {
+		if strings.HasPrefix(l, "decision-") || strings.HasPrefix(l, "retest:") {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	updateCmd.Flags().StringP("status", "s", "", "New status")
+	updateCmd.Flags().String("retest", "", "Re-test date YYYY-MM-DD for --status blocked (an external blocker never self-clears; aegis-jawbv)")
 	registerPriorityFlag(updateCmd, "")
 	updateCmd.Flags().String("title", "", "New title")
 	updateCmd.Flags().StringP("type", "t", "", "New type (bug|feature|task|epic|chore|decision); custom types require types.custom config")
