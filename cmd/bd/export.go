@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads/internal/atomicfile"
+	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/storage/domain"
 	"github.com/steveyegge/beads/internal/types"
+	"github.com/steveyegge/beads/internal/ui"
 )
 
 var exportCmd = &cobra.Command{
@@ -87,6 +91,9 @@ func runExport(cmd *cobra.Command, args []string) error {
 		w = aw
 	} else {
 		w = os.Stdout
+		if shouldWarnTrackedJSONLNotUpdated(ui.IsTerminal()) {
+			fmt.Fprintln(os.Stderr, "Warning: export is writing to stdout; tracked .beads/issues.jsonl was not updated. Use -o .beads/issues.jsonl to update it.")
+		}
 	}
 
 	// Build filter for issues table. Export all statuses by default.
@@ -253,6 +260,31 @@ func runExport(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// shouldWarnTrackedJSONLNotUpdated detects the easy-to-miss case where a
+// redirected stdout export succeeds while the repository's tracked JSONL
+// snapshot remains stale. Interactive stdout is intentionally quiet because
+// the user can see that the records are being printed rather than saved.
+func shouldWarnTrackedJSONLNotUpdated(stdoutIsTTY bool) bool {
+	if stdoutIsTTY {
+		return false
+	}
+	beadsDir := beads.FindBeadsDir()
+	if beadsDir == "" {
+		return false
+	}
+	jsonlPath := filepath.Join(beadsDir, "issues.jsonl")
+	if _, err := os.Stat(jsonlPath); err != nil {
+		return false
+	}
+	repoRoot := filepath.Dir(beadsDir)
+	relPath, err := filepath.Rel(repoRoot, jsonlPath)
+	if err != nil {
+		return false
+	}
+	cmd := exec.Command("git", "-C", repoRoot, "ls-files", "--error-unmatch", "--", relPath) // #nosec G204 -- paths are locally discovered, not shell-expanded
+	return cmd.Run() == nil
 }
 
 // exportIssueRecord wraps IssueWithCounts with a _type discriminator so that

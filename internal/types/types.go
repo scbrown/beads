@@ -112,6 +112,20 @@ type Issue struct {
 	Payload   string `json:"payload,omitempty"`    // Event-specific JSON data
 }
 
+// CanonicalCreatedBy returns the roster-style identity used for display and
+// aggregation while leaving CreatedBy untouched as provenance. Historical
+// stores contain both bare names ("ellie") and workspace-qualified names
+// ("beads_aegis/crew/ellie").
+func (i *Issue) CanonicalCreatedBy() string {
+	parts := strings.Split(strings.Trim(i.CreatedBy, "/"), "/")
+	for idx := len(parts) - 2; idx >= 0; idx-- {
+		if parts[idx] == "crew" && idx+1 < len(parts) {
+			return parts[idx+1]
+		}
+	}
+	return i.CreatedBy
+}
+
 // ComputeContentHash creates a deterministic hash of the issue's content.
 // Uses all substantive fields (excluding ID, timestamps, and compaction metadata)
 // to ensure that identical content produces identical hashes across all clones.
