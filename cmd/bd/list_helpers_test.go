@@ -256,6 +256,9 @@ func TestListDisplayPrettyList(t *testing.T) {
 		{ID: "bd-1", Title: "A", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
 		{ID: "bd-2", Title: "B", Status: types.StatusInProgress, Priority: 1, IssueType: types.TypeFeature},
 		{ID: "bd-1.1", Title: "C", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+		{ID: "bd-3", Title: "D", Status: types.StatusBlocked, Priority: 2, IssueType: types.TypeTask},
+		{ID: "bd-4", Title: "E", Status: types.StatusDeferred, Priority: 2, IssueType: types.TypeTask},
+		{ID: "bd-5", Title: "F", Status: types.StatusHooked, Priority: 2, IssueType: types.TypeTask},
 	}
 
 	out = captureStdout(t, func() error {
@@ -264,6 +267,9 @@ func TestListDisplayPrettyList(t *testing.T) {
 	})
 	if !strings.Contains(out, "bd-1") || !strings.Contains(out, "bd-1.1") || !strings.Contains(out, "Total:") {
 		t.Fatalf("unexpected output: %q", out)
+	}
+	if !strings.Contains(out, "Total: 6 issues (2 open, 1 in progress, 1 blocked, 1 deferred, 1 hooked)") {
+		t.Fatalf("summary omitted a represented status: %q", out)
 	}
 }
 

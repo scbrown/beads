@@ -90,7 +90,7 @@ func TestEmbeddedStatus(t *testing.T) {
 		if !ok {
 			t.Fatal("expected 'summary' object in JSON output")
 		}
-		for _, key := range []string{"total_issues", "open_issues", "in_progress_issues", "closed_issues"} {
+		for _, key := range []string{"total_issues", "open_issues", "in_progress_issues", "status_blocked_issues", "blocked_issues", "deferred_issues", "hooked_issues", "closed_issues"} {
 			if _, ok := summary[key]; !ok {
 				t.Errorf("expected '%s' key in summary", key)
 			}

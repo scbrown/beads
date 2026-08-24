@@ -1197,8 +1197,10 @@ type Statistics struct {
 	OpenIssues              int     `json:"open_issues"`
 	InProgressIssues        int     `json:"in_progress_issues"`
 	ClosedIssues            int     `json:"closed_issues"`
-	BlockedIssues           int     `json:"blocked_issues"`
-	DeferredIssues          int     `json:"deferred_issues"` // Issues on ice
+	BlockedIssues           int     `json:"blocked_issues"`        // Issues blocked by dependency edges
+	StatusBlockedIssues     int     `json:"status_blocked_issues"` // Issues whose explicit status is blocked
+	DeferredIssues          int     `json:"deferred_issues"`       // Issues on ice
+	HookedIssues            int     `json:"hooked_issues"`
 	ReadyIssues             int     `json:"ready_issues"`
 	PinnedIssues            int     `json:"pinned_issues"` // Persistent issues
 	EpicsEligibleForClosure int     `json:"epics_eligible_for_closure"`

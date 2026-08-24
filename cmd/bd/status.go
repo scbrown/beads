@@ -105,7 +105,10 @@ Examples:
 		fmt.Printf("  Total Issues:           %d\n", stats.TotalIssues)
 		fmt.Printf("  Open:                   %s\n", ui.RenderPass(fmt.Sprintf("%d", stats.OpenIssues)))
 		fmt.Printf("  In Progress:            %s\n", ui.RenderWarn(fmt.Sprintf("%d", stats.InProgressIssues)))
-		fmt.Printf("  Blocked:                %s\n", ui.RenderFail(fmt.Sprintf("%d", stats.BlockedIssues)))
+		fmt.Printf("  Status Blocked:         %s\n", ui.RenderFail(fmt.Sprintf("%d", stats.StatusBlockedIssues)))
+		fmt.Printf("  Dependency Blocked:     %s\n", ui.RenderFail(fmt.Sprintf("%d", stats.BlockedIssues)))
+		fmt.Printf("  Deferred:               %d\n", stats.DeferredIssues)
+		fmt.Printf("  Hooked:                 %d\n", stats.HookedIssues)
 		fmt.Printf("  Closed:                 %d\n", stats.ClosedIssues)
 		fmt.Printf("  Ready to Work:          %s\n", ui.RenderPass(fmt.Sprintf("%d", stats.ReadyIssues)))
 
@@ -182,9 +185,11 @@ func getAssignedStatistics(assignee string) *types.Statistics {
 		case types.StatusInProgress:
 			stats.InProgressIssues++
 		case types.StatusBlocked:
-			stats.BlockedIssues++
+			stats.StatusBlockedIssues++
 		case types.StatusDeferred:
 			stats.DeferredIssues++
+		case types.StatusHooked:
+			stats.HookedIssues++
 		case types.StatusClosed:
 			stats.ClosedIssues++
 		}
@@ -197,6 +202,10 @@ func getAssignedStatistics(assignee string) *types.Statistics {
 	readyIssues, err := store.GetReadyWork(ctx, readyFilter)
 	if err == nil {
 		stats.ReadyIssues = len(readyIssues)
+	}
+	blockedIssues, err := store.GetBlockedIssues(ctx, readyFilter)
+	if err == nil {
+		stats.BlockedIssues = len(blockedIssues)
 	}
 
 	return stats

@@ -174,17 +174,20 @@ func displayPrettyListWithDeps(issues []*types.Issue, showHeader bool, allDeps m
 	// Summary
 	fmt.Println()
 	fmt.Println(strings.Repeat("-", 80))
-	openCount := 0
-	inProgressCount := 0
+	statusCounts := make(map[types.Status]int)
 	for _, issue := range issues {
-		switch issue.Status {
-		case "open":
-			openCount++
-		case "in_progress":
-			inProgressCount++
+		statusCounts[issue.Status]++
+	}
+	parts := make([]string, 0, 7)
+	for _, status := range []types.Status{
+		types.StatusOpen, types.StatusInProgress, types.StatusBlocked,
+		types.StatusDeferred, types.StatusHooked, types.StatusClosed, types.StatusPinned,
+	} {
+		if count := statusCounts[status]; count > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", count, strings.ReplaceAll(string(status), "_", " ")))
 		}
 	}
-	fmt.Printf("Total: %d issues (%d open, %d in progress)\n", len(issues), openCount, inProgressCount)
+	fmt.Printf("Total: %d issues (%s)\n", len(issues), strings.Join(parts, ", "))
 	fmt.Println()
-	fmt.Println("Status: ○ open  ◐ in_progress  ● blocked  ✓ closed  ❄ deferred")
+	fmt.Println("Status: ○ open  ◐ in_progress  ● blocked  ✓ closed  ❄ deferred  ⚓ hooked")
 }
