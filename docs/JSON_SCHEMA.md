@@ -1,6 +1,6 @@
 # JSON Output Schema Contract
 
-Last reviewed: 2026-05-08
+Last reviewed: 2026-08-29
 
 Freshness source: `cmd/bd/output.go`, `cmd/bd/errors.go`, and
 `cmd/bd/protocol/json_contract_test.go`.

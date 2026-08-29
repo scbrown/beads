@@ -1,6 +1,6 @@
 # Setup Command Reference
 
-Last reviewed: 2026-05-08
+Last reviewed: 2026-08-29
 
 Freshness source: `cmd/bd/setup*.go` and `internal/recipes/`.
 
