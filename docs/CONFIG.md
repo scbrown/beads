@@ -1,6 +1,6 @@
 # Configuration System
 
-Last reviewed: 2026-05-08
+Last reviewed: 2026-08-29
 
 Freshness source: `cmd/bd/main.go`, `cmd/bd/config.go`, and
 `internal/configfile/`.
