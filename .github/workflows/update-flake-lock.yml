@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   update-flake-lock:
+    # Forks do not inherit the upstream GitHub App credentials. Opt in only
+    # after configuring the app ID/private key for this repository.
+    if: ${{ vars.FLAKE_UPDATE_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Mint flake update token

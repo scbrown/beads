@@ -484,6 +484,7 @@ jobs:
         if: matrix.coverage
         env:
           BEADS_TEST_BD_BINARY: ${{ github.workspace }}/ci-build-artifacts/bd-linux-gms-pure
+          BEADS_TEST_SKIP: dolt
         run: |
           gotestsum \
             --junitfile junit.xml \
@@ -492,6 +493,8 @@ jobs:
 
       - name: Test
         if: ${{ !matrix.coverage }}
+        env:
+          BEADS_TEST_SKIP: dolt
         run: go test -tags gms_pure_go ${{ matrix.test-flags }} -skip '^TestEmbedded' ./...
 
       - name: Upload coverage to Codecov

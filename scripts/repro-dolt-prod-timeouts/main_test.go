@@ -335,6 +335,9 @@ func TestSeedProductionShapeFullCoversTypedDependencyInserts(t *testing.T) {
 }
 
 func TestSeedProductionShapeFullSmallIssueCountRealSchema(t *testing.T) {
+	if strings.Contains(os.Getenv("BEADS_TEST_SKIP"), "dolt") {
+		t.Skip("BEADS_TEST_SKIP=dolt")
+	}
 	if _, err := exec.LookPath("dolt"); err != nil {
 		t.Skip("dolt not installed, skipping real-schema smoke")
 	}
